@@ -1,0 +1,67 @@
+import discord
+import aiohttp
+import json
+
+# Open Web UI API Configuration
+API_URL = "http://localhost:8080/api/chat/completions"  # API endpoint for chat completion
+JWT_TOKEN = "YOUR_JWT_TOKEN"  # Replace with your actual JWT token
+
+async def query_llm(prompt):
+    """
+    Sends a message to the local AI model and retrieves a response.
+    """
+    async with aiohttp.ClientSession() as session:
+        payload = {
+            "model": "deepseek-r1:7b",  # Your local AI model
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {JWT_TOKEN}",
+        }
+
+        try:
+            async with session.post(API_URL, headers=headers, json=payload) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data.get("choices", [{}])[0].get("message", {}).get("content", "Error: Empty response.")
+                else:
+                    return f"API Error: {response.status}"
+        except Exception as e:
+            return f"Connection Error: {str(e)}"
+
+async def send_message(message, user_message):
+    """
+    Sends the message to the AI model and displays the response in Discord.
+    """
+    response = await query_llm(user_message)
+    await message.channel.send(response)
+
+def run_discord_bot():
+    token = "YOUR_DISCORD_BOT_TOKEN"  # Replace with your actual bot token
+    intents = discord.Intents.default()
+    intents.message_content = True
+    client = discord.Client(intents=intents)
+
+    @client.event
+    async def on_ready():
+        print(f'{client.user} is online!')
+
+    @client.event
+    async def on_message(message):
+        if message.author == client.user:
+            return
+
+        user_message = message.content.strip()
+
+        if user_message.startswith("++"):
+            prompt = user_message[2:].strip()  # Remove "++" from the message
+            if prompt:
+                await send_message(message, prompt)
+            else:
+                await message.channel.send("❌ Please add a message after `++`!")
+
+    client.run(token)
+
+# Run the bot
+run_discord_bot()
